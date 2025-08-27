@@ -29,6 +29,8 @@ It aims to explore **resilient and efficient secure communication** in both idea
 
 This project is designed for educational and research purposes, to provide a **reproducible framework** for adaptive QKD simulations, and to introduce the broader community to the concept of a “quantum immune system.”
 
+AETHER-QKD is a Python-based simulator of an adaptive quantum key distribution (QKD) system, inspired by the principles of biological immune systems. For an extended article and full explanation of the architecture, see the [AETHER project page](https://www.alwaysask.co.uk/portfolio-2-2/project-one-ephnc-tk2l7).
+
 ---
 
 ## Motivation
