@@ -86,3 +86,17 @@ All components are implemented in Python and designed to **interoperate seamless
 
 ```bash
 pip install numpy matplotlib
+```
+
+
+## Running Baseline Tests
+
+The AETHER-QKD simulator comes with a set of baseline tests to verify performance and compare protocols. To run these tests:
+
+1. Make sure you have Python 3.10+ installed, along with the required dependencies (see [Installation](#installation) above).
+2. Navigate to the project root directory.
+3. Run the main simulation script:
+
+```bash
+python main.py
+```
