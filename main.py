@@ -1,132 +1,69 @@
-# main.py
+# main_aether.py
 
 import random
 from typing import Dict, Any
 
-# =============================================================================
-# TEAL Simulator - Main Experiment Runner
-# FINAL CORRECTED VERSION - All interfaces are now synchronized.
-# =============================================================================
-
-
-# --- Import all our perfected protocol blueprints ---
 from protocols.bb84 import run_bb84_protocol
-from protocols.mdi import run_mdi_protocol
+from protocols.decoy_mdi_v2 import run_decoy_mdi_protocol
 from protocols.teal import run_teal_protocol
+from protocols.teal_e import run_teal_e_protocol
 from controller.immune_system import TEALController
-
+from controller.aether_controller import AETHERController
 
 def print_results(protocol_name: str, results: Dict[str, Any], total_qubits: int):
-    """A professional helper function to print protocol results in a standard format."""
     print(f"\n--- RESULTS for {protocol_name} ---")
-    
-    if results.get('mode_chosen'):
-        print(f"Controller Mode Chosen: {results['mode_chosen']}")
-    
+    if results.get('mode_chosen'): print(f"Controller Mode: {results['mode_chosen']}")
     sifted_len = results.get('sifted_key_length', 0)
-    qber = results.get('qber', 0)
+    qber = results.get('qber_obs', results.get('qber', 0))
     skr = results.get('secure_key_rate', 0)
-    
     sift_rate = sifted_len / total_qubits if total_qubits > 0 else 0
-    final_key_len = int(total_qubits * skr)
+    final_key = int(total_qubits * skr)
+    print(f"Sifted Key: {sifted_len} bits (Efficiency: {sift_rate:.3%})")
+    print(f"Final QBER (Observed): {qber:.3%}"); print(f"Secure Key Rate (Finite-Key): {skr:.5f} bits/qubit"); print(f"Est. Final Key: {final_key} bits")
 
-    print(f"Sifted Key Length: {sifted_len} bits (Efficiency: {sift_rate:.3%})")
-    print(f"Final QBER: {qber:.3%}")
-    print(f"Secure Key Rate: {skr:.5f} bits/qubit")
-    print(f"Estimated Final Secure Key from this run: {final_key_len} bits")
+def run_comparison(env_name: str, signals: int, loss: float, noise: float, leakage: float, seed: int):
+    print("\n" + "="*70 + f"\nEXPERIMENT: Simulating a {env_name} environment\n" + "="*70)
+    print(f"Parameters: Signals={signals}, Loss={loss:.1%}, Noise={noise:.1%}, Leakage={leakage:.1%}\n")
+    
+    bb84 = run_bb84_protocol(signals, loss, noise, leakage, seed)
+    mdi = run_decoy_mdi_protocol(signals, loss, noise, leakage, seed)
 
+    aether_controller = AETHERController()
+    chosen_protocol = aether_controller.choose_protocol(noise, leakage, random.Random(seed))
+    
+    if chosen_protocol == "TEAL":
+        aether_results = run_teal_protocol(
+            num_qubits=signals, block_size=4,
+            channel_loss_prob=loss, hardware_noise_prob=noise,
+            source_leakage_prob=leakage, controller=TEALController(), rng_seed=seed
+        )
+        aether_name = "AETHER System (deploying TEAL Fortress)"
+    else:
+        aether_results = run_teal_e_protocol(
+            num_qubits=signals, hardware_noise_prob=noise,
+            source_leakage_prob=leakage, rng_seed=seed
+        )
+        aether_name = "AETHER System (deploying TEAL-E Racer)"
 
-def run_comparison(
-    env_name: str,
-    num_signals: int,
-    loss: float,
-    noise: float,
-    leakage: float,
-    seed: int
-):
-    """
-    Runs all three protocols under the same environmental conditions and
-    prints a comprehensive verdict.
-    """
-    print("\n" + "="*60 + f"\nEXPERIMENT: Simulating a {env_name} environment\n" + "="*60)
-    print(f"Parameters: Signals={num_signals}, Loss={loss:.1%}, "
-          f"Hardware Noise={noise:.1%}, Source Leakage={leakage:.1%}\n")
+    print_results("BB84 (Classic)", bb84, signals)
+    print_results("Decoy-State MDI (State-of-the-Art)", mdi, signals)
+    print_results(aether_name, aether_results, signals)
     
-    # --- 1. Run Standard BB84 Protocol ---
-    bb84_results = run_bb84_protocol(
-        num_qubits=num_signals,
-        channel_loss_prob=loss,
-        hardware_noise_prob=noise,
-        source_leakage_prob=leakage,
-        rng_seed=seed
-    )
+    skrs = [
+        (bb84['secure_key_rate'], "BB84"),
+        (mdi['secure_key_rate'], "Decoy-State MDI"),
+        (aether_results['secure_key_rate'], "AETHER System")
+    ]
     
-    # --- 2. Run Baseline MDI Protocol ---
-    mdi_results = run_mdi_protocol(
-        num_qubits=num_signals,
-        channel_loss_prob=loss,
-        hardware_noise_prob=noise,
-        source_leakage_prob=leakage,
-        rng_seed=seed
-    )
+    print("\n" + "-"*30 + " FINAL VERDICT " + "-"*30)
+    for name, rate in [(n, r['secure_key_rate']) for r,n in [(bb84,"BB84"),(mdi,"Decoy-MDI"),(aether_results,"AETHER")]]:
+        print(f"{name} SKR: {rate:.5f}")
     
-    # --- 3. Run Full TEAL Protocol ---
-    # *** BUG FIX IS HERE: Correctly call run_teal_protocol with 'num_qubits' ***
-    block_size = 4
-    
-    controller = TEALController()
-    teal_results = run_teal_protocol(
-        num_qubits=num_signals, # Pass total signals
-        block_size=block_size,
-        channel_loss_prob=loss,
-        hardware_noise_prob=noise,
-        source_leakage_prob=leakage,
-        controller=controller,
-        rng_seed=seed
-    )
-    
-    # --- Presentation of Results ---
-    print_results("Standard BB84", bb84_results, num_signals)
-    print_results("Baseline MDI", mdi_results, num_signals)
-    print_results("Advanced TEAL", teal_results, num_signals)
-    
-    # --- Final Verdict ---
-    skr_bb84 = bb84_results['secure_key_rate']
-    skr_mdi = mdi_results['secure_key_rate']
-    skr_teal = teal_results['secure_key_rate']
-    
-    print("\n" + "-"*25 + " FINAL VERDICT " + "-"*25)
-    print(f"BB84 Secure Key Rate:   {skr_bb84:.5f}")
-    print(f"MDI Secure Key Rate:    {skr_mdi:.5f}")
-    print(f"TEAL Secure Key Rate:   {skr_teal:.5f}")
-    
-    winner = max((skr_bb84, "BB84"), (skr_mdi, "MDI"), (skr_teal, "TEAL"))
-    
+    winner = max(skrs)
     print(f"\nCONCLUSION: {winner[1]} WINS in this environment.")
-    print("="*60)
-
+    print("="*70)
 
 if __name__ == "__main__":
-    
-    # --- Define Global Simulation Parameters ---
-    TOTAL_SIGNALS = 20000 
-    
-    # --- Experiment 1: Clean, Low-Noise Environment ---
-    run_comparison(
-        env_name="CLEAN, HEALTHY",
-        num_signals=TOTAL_SIGNALS,
-        loss=0.02,
-        noise=0.001,
-        leakage=0.0,
-        seed=1
-    )
-
-    # --- Experiment 2: Hostile Environment with Source Attack ---
-    run_comparison(
-        env_name="HOSTILE (Source Leakage Attack)",
-        num_signals=TOTAL_SIGNALS,
-        loss=0.02,
-        noise=0.001,
-        leakage=0.03,
-        seed=2
-    )
+    TOTAL_SIGNALS = 20000
+    run_comparison("CLEAN, HEALTHY", TOTAL_SIGNALS, 0.02, 0.001, 0.0, 1)
+    run_comparison("HOSTILE (High Noise & Leakage)", TOTAL_SIGNALS, 0.02, 0.03, 0.03, 2)
